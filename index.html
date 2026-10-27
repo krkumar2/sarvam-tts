@@ -69,7 +69,7 @@
   <h1>Text to Speech</h1>
   <p class="sub">Write your script, pick a voice and style, then generate and download the audio.</p>
 
-  <div class="card keybar" id="keyCard">
+  <div class="card keybar hidden" id="keyCard">
     <div id="keyEdit">
       <label class="f" for="apiKey" style="margin-top:0">Sarvam API key</label>
       <div class="row">
@@ -239,11 +239,13 @@
   // Max characters per API request (kept a little under the documented limits)
   const CHUNK_LIMIT = { clone: 950, "bulbul:v3": 2400, "bulbul:v4-flash": 2400 };
   const KEY_NAME = "sarvamApiKey";
+  // Built-in key so the page works with no setup. A key saved on the device (via the key box) takes priority.
+  const BUILTIN_KEY = "sk_341t652t_8LctXf2qHwPiIJSX7hM8M0if";
   let memKey = "";
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const num = (v, d) => (v === "" || v == null || isNaN(+v) ? d : +v);
 
-  function getKey() { try { return localStorage.getItem(KEY_NAME) || memKey; } catch { return memKey; } }
+  function getKey() { try { return localStorage.getItem(KEY_NAME) || memKey || BUILTIN_KEY; } catch { return memKey || BUILTIN_KEY; } }
   function setKey(k) { memKey = k; try { k ? localStorage.setItem(KEY_NAME, k) : localStorage.removeItem(KEY_NAME); } catch {} }
 
   // Split long text into chunks at sentence boundaries
