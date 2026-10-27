@@ -1,0 +1,42 @@
+name: Sync voices
+
+# Sarvam doesn't let web pages read the voice list, so this job copies it into voices.json,
+# which the page loads. New cloned voices show up in the dropdown within about 15 minutes.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch voices from Sarvam
+        env:
+          SARVAM_API_KEY: ${{ secrets.SARVAM_API_KEY }}
+        run: |
+          # Use the repo secret if set, otherwise the key built into the page
+          KEY="${SARVAM_API_KEY:-$(sed -n 's/.*const BUILTIN_KEY = "\([^"]*\)".*/\1/p' index.html)}"
+          curl -sf "https://api.sarvam.ai/voices?page_size=100" -H "api-subscription-key: $KEY" -o raw.json
+          python3 - <<'PY'
+          import json
+          voices = json.load(open("raw.json"))["data"]["voices"]
+          out = [{"id": v["id"], "name": v["name"], "language": v.get("language"), "descriptor": v.get("descriptor")}
+                 for v in voices if v.get("status") == "active"]
+          out.sort(key=lambda v: v["name"].lower())
+          json.dump(out, open("voices.json", "w"), indent=1)
+          print(f"{len(out)} voices")
+          PY
+          rm raw.json
+      - name: Commit if changed
+        run: |
+          git add voices.json
+          if git diff --cached --quiet; then echo "No change"; exit 0; fi
+          git config user.name "voice-sync"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "Update voice list"
+          git push

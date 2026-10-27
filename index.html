@@ -451,8 +451,9 @@
     return { blob: new Blob([audio], { type: MIME[o.apiCodec] || "application/octet-stream" }), notes, chunks: chunks.length, ext };
   }
 
-  // Sarvam's voice list endpoint doesn't allow browser requests, so saved voices are kept on this device
-  const DEFAULT_VOICES = [
+  // Sarvam's voice list endpoint doesn't allow browser requests. A GitHub job copies the list into
+  // voices.json every 15 minutes (see .github/workflows/sync-voices.yml); these are the fallback.
+  let DEFAULT_VOICES = [
     { id: "svc-44088936-8a0d-442e-9ee9-d92ef475dc1c", name: "Sundaram", descriptor: "conversational" },
     { id: "svc-f066fe5a-089c-460b-bbdd-1bf53ea07b2e", name: "Abhishek", descriptor: "conversational" },
   ];
@@ -644,6 +645,15 @@
     $("keyMask").textContent = k ? k.slice(0, 6) + "…" + k.slice(-4) : "";
   }
 
+  async function loadSyncedVoices() {
+    try {
+      const res = await fetch("voices.json?t=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) return;
+      const list = await res.json();
+      if (Array.isArray(list) && list.length) DEFAULT_VOICES = list;
+    } catch {}
+  }
+
   function refreshVoices(select) {
     data = { cloned: savedVoices(), stock: STOCK_VOICES, cloneLangs: CLONE_LANGS, stockLangs: STOCK_LANGS };
     $("voiceId").innerHTML = data.cloned.map((v) => `<option value="${v.id}"></option>`).join("");
@@ -669,6 +679,7 @@
 
   showKeyState();
   refreshVoices();
+  loadSyncedVoices().then(() => refreshVoices($("voiceId").value));
 </script>
 </body>
 </html>
