@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Text to Speech</title>
+<style>
+  :root { --bg:#f6f7fb; --card:#fff; --text:#1c1f2a; --muted:#6b7183; --line:#e2e5ee; --soft:#eef1fb; --accent:#3b5bdb; --accent-h:#2f4ac0; --err:#c92a2a; --warn:#8a5a00; --warn-bg:#fff6e0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12141b; --card:#1b1e28; --text:#e8eaf2; --muted:#9aa0b4; --line:#2c3040; --soft:#242a3d; --accent:#5c7cfa; --accent-h:#748ffc; --err:#ff8787; --warn:#ffd8a8; --warn-bg:#3a2e14; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:1100px; margin:32px auto; padding:0 16px; }
+  h1 { font-size:24px; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 20px; }
+  .grid { display:grid; grid-template-columns: minmax(0,1fr) 360px; gap:16px; align-items:start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .card + .card { margin-top:16px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 10px; }
+  .section + .section { margin-top:18px; padding-top:16px; border-top:1px solid var(--line); }
+  textarea, select, input[type=text], input[type=number] { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); font:inherit; }
+  textarea { min-height:300px; resize:vertical; line-height:1.6; }
+  textarea:focus, select:focus, input:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  label.f { display:block; font-size:13px; font-weight:600; margin:10px 0 4px; }
+  .hint { color:var(--muted); font-size:12.5px; margin-top:4px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .count { color:var(--muted); font-size:13px; margin-left:auto; }
+  .seg { display:flex; background:var(--soft); border-radius:9px; padding:3px; gap:3px; }
+  .seg button { flex:1; white-space:nowrap; border:0; background:transparent; color:var(--text); padding:7px 6px; border-radius:7px; font:inherit; font-size:13px; cursor:pointer; }
+  .seg button.on { background:var(--card); box-shadow:0 1px 2px rgba(0,0,0,.12); font-weight:600; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chips button { border:1px solid var(--line); background:var(--bg); color:var(--text); padding:5px 11px; border-radius:999px; font:inherit; font-size:13px; cursor:pointer; }
+  .chips button.on { border-color:var(--accent); background:var(--soft); color:var(--accent); font-weight:600; }
+  .slider { margin-top:10px; }
+  .slider .top { display:flex; justify-content:space-between; font-size:13px; font-weight:600; }
+  .slider .top output { color:var(--accent); font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .check { display:flex; gap:8px; align-items:flex-start; margin-top:10px; font-size:13.5px; }
+  .check input { margin-top:3px; accent-color:var(--accent); }
+  .check small { display:block; color:var(--muted); }
+  details summary { cursor:pointer; font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:600; }
+  .btn { display:inline-block; padding:10px 18px; border:0; border-radius:8px; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; text-decoration:none; }
+  .btn:hover { background:var(--accent-h); }
+  .btn:disabled { opacity:.6; cursor:wait; }
+  .btn.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); padding:6px 12px; font-size:13px; }
+  .btn.ghost:hover { background:var(--soft); }
+  #result { display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--line); }
+  audio { width:100%; }
+  .meta { color:var(--muted); font-size:13px; }
+  .notes { background:var(--warn-bg); color:var(--warn); border-radius:8px; padding:8px 12px; font-size:13px; margin-top:10px; display:none; }
+  #error { color:var(--err); margin-top:10px; display:none; }
+  .hist { list-style:none; margin:0; padding:0; }
+  .hist li { display:flex; gap:10px; align-items:center; padding:8px 0; border-top:1px solid var(--line); font-size:13.5px; }
+  .hist li:first-child { border-top:0; }
+  .hist .t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hidden { display:none !important; }
+  .keybar { margin-bottom:16px; }
+  .keybar .row { gap:8px; }
+  .keybar input { flex:1; min-width:200px; }
+  .ok { color:var(--muted); font-size:13.5px; }
+  .ok b { color:var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Text to Speech</h1>
+  <p class="sub">Write your script, pick a voice and style, then generate and download the audio.</p>
+
+  <div class="card keybar" id="keyCard">
+    <div id="keyEdit">
+      <label class="f" for="apiKey" style="margin-top:0">Sarvam API key</label>
+      <div class="row">
+        <input type="password" id="apiKey" placeholder="sk_..." autocomplete="off" spellcheck="false">
+        <button class="btn" id="saveKey">Save key</button>
+      </div>
+      <div class="hint">The key is saved only in this browser on this device and is sent only to Sarvam. Get one at dashboard.sarvam.ai.</div>
+    </div>
+    <div id="keyShow" class="row hidden">
+      <span class="ok">Sarvam API key <b id="keyMask"></b> saved on this device.</span>
+      <button class="btn ghost" id="changeKey">Change</button>
+      <button class="btn ghost" id="removeKey">Remove</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <textarea id="text" placeholder="Enter your text here…"></textarea>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="go">Generate audio</button>
+          <span class="count" id="count">0 characters</span>
+        </div>
+        <div id="error"></div>
+        <div id="result">
+          <audio id="player" controls></audio>
+          <p class="meta hidden" id="rawNote">This format is raw audio for telephony systems. It can't play in the browser, but you can download it.</p>
+          <div class="row" style="margin-top:10px">
+            <a class="btn" id="dl">Download</a>
+            <span class="meta" id="meta"></span>
+          </div>
+          <div class="notes" id="notes"></div>
+        </div>
+      </div>
+
+      <div class="card hidden" id="histCard">
+        <h2>This session</h2>
+        <ul class="hist" id="hist"></ul>
+      </div>
+    </div>
+
+    <aside class="card">
+      <div class="section">
+        <h2>Voice</h2>
+        <div class="seg" id="modeSeg">
+          <button data-mode="clone" class="on">My voices</button>
+          <button data-mode="upload">Upload clip</button>
+          <button data-mode="stock">Sarvam</button>
+        </div>
+
+        <label class="f" for="lang">Language</label>
+        <select id="lang"></select>
+
+        <div id="cloneBox">
+          <label class="f" for="voiceId">Cloned voice</label>
+          <select id="voiceId"></select>
+          <details style="margin-top:8px">
+            <summary style="text-transform:none;letter-spacing:0;font-size:13px">Add another cloned voice</summary>
+            <input type="text" id="newVoiceName" placeholder="Name, e.g. Priya" style="margin-top:8px">
+            <div class="row" style="margin-top:6px">
+              <input type="text" id="newVoiceId" placeholder="svc-…" spellcheck="false" style="flex:1;min-width:160px">
+              <button class="btn ghost" id="addVoice">Add</button>
+            </div>
+            <div class="hint">Find voice IDs in Sarvam's dashboard. Added voices are remembered on this device.</div>
+          </details>
+        </div>
+
+        <div id="uploadBox" class="hidden">
+          <label class="f" for="refFile">Reference clip</label>
+          <input type="file" id="refFile" accept="audio/*">
+          <div class="hint">One speaker, up to 15 seconds and 10 MB. WAV works best. Used for this generation only.</div>
+          <label class="f" for="refText">What's said in the clip (optional)</label>
+          <input type="text" id="refText" maxlength="500" placeholder="Improves accuracy of the clone">
+        </div>
+
+        <div id="stockBox" class="hidden">
+          <label class="f" for="model">Model</label>
+          <select id="model">
+            <option value="bulbul:v4-flash">Bulbul v4 Flash: voices with built-in tones</option>
+            <option value="bulbul:v3">Bulbul v3: 37 voices</option>
+          </select>
+          <label class="f" for="speaker">Speaker</label>
+          <select id="speaker"></select>
+          <div class="hint" id="speakerHint"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Tone and style</h2>
+        <div class="chips" id="presets"></div>
+        <div class="slider">
+          <div class="top"><label for="pace">Speed</label><output id="paceOut"></output></div>
+          <input type="range" id="pace" min="0.5" max="2" step="0.05" value="1">
+        </div>
+        <div class="slider">
+          <div class="top"><label for="pitch">Pitch</label><output id="pitchOut"></output></div>
+          <input type="range" id="pitch" min="-6" max="6" step="0.5" value="0">
+        </div>
+        <div class="slider">
+          <div class="top"><label for="volume">Volume</label><output id="volumeOut"></output></div>
+          <input type="range" id="volume" min="0.3" max="3" step="0.05" value="1">
+        </div>
+        <div class="slider" id="tempBox">
+          <div class="top"><label for="temperature">Expressiveness</label><output id="temperatureOut"></output></div>
+          <input type="range" id="temperature" min="0.01" max="1" step="0.01" value="0.6">
+          <div class="hint">Lower is steadier, higher is more varied and emotive.</div>
+        </div>
+        <div class="row" style="margin-top:10px"><button class="btn ghost" id="reset">Reset style</button></div>
+      </div>
+
+      <div class="section">
+        <h2>Output</h2>
+        <div class="two">
+          <div>
+            <label class="f" for="format">Format</label>
+            <select id="format">
+              <option value="wav">WAV</option>
+              <option value="mp3">MP3</option>
+              <option value="flac">FLAC</option>
+              <option value="aac">AAC</option>
+              <option value="opus">Opus</option>
+              <option value="linear16">Raw PCM 16-bit</option>
+              <option value="mulaw">μ-law (telephony)</option>
+              <option value="alaw">A-law (telephony)</option>
+            </select>
+          </div>
+          <div>
+            <label class="f" for="sampleRate">Sample rate</label>
+            <select id="sampleRate">
+              <option value="8000">8 kHz</option>
+              <option value="16000">16 kHz</option>
+              <option value="22050">22.05 kHz</option>
+              <option value="24000" selected>24 kHz</option>
+              <option value="32000">32 kHz</option>
+              <option value="44100">44.1 kHz</option>
+              <option value="48000">48 kHz</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <details>
+          <summary>Advanced</summary>
+          <label class="check" id="normBox"><input type="checkbox" id="normalize" checked><span>Read numbers naturally<small>Speaks numbers, dates and currency as words</small></span></label>
+          <label class="check" id="qcBox"><input type="checkbox" id="qc"><span>Quality check<small>Sarvam verifies the audio and retries if needed. Slower.</small></span></label>
+          <label class="check" id="vadBox"><input type="checkbox" id="vad" checked><span>Trim silence<small>Removes leading and trailing silence on short text</small></span></label>
+          <div id="durBox">
+            <div class="two">
+              <div><label class="f" for="minDur">Min length (sec)</label><input type="number" id="minDur" min="0" step="0.5" placeholder="Any"></div>
+              <div><label class="f" for="maxDur">Max length (sec)</label><input type="number" id="maxDur" min="0" step="0.5" placeholder="Any"></div>
+            </div>
+            <div class="hint">Min pads short audio with silence. Max squeezes long audio to fit and replaces Speed, but it can't go below your voice's reference clip length (about 15 sec). Text under about 950 characters only.</div>
+          </div>
+        </details>
+      </div>
+    </aside>
+  </div>
+</main>
+<script>
+  // ---- Sarvam engine: runs fully in the browser. The API key is kept only in this device's browser storage. ----
+  const API = "https://api.sarvam.ai";
+  const STOCK_VOICES = {"bulbul:v4-flash":["aayan_hi_conversational","amit_hi_conversational","ashutosh_hi_conversational","kabir_hi_conversational","kavya_hi_conversational","manan_hi_conversational","rahul_hi_conversational","sumit_hi_conversational","kangkana_as_conversational","mouchumi_as_conversational","arnab_bn_conversation","roopa_bn_conversational","aditi_en_stories","aparna_en_companion","aparna_en_edtech","ashwin_en_sports","ashwin_en_sports_energetic","chandrika_en_stories","dev_en_recovery","dev_en_conversational","deven_en_conversation","ishita_en_customer","ishita_en_medical","ishita_en_numbers","ishita_en_social","ishita_en_stories","kalpit_en_edtech","nachiket_en_ads","neha_en_customer","neha_en_latenight","nupur_en_kids","ojas_en_social","ritu_en_edtech","ritu_en_latenight","ritu_en_medical","ritu_en_reels","rohan_en_recovery","roopa_en_conversational","rustom_en_suspense","sanchita_en_companion","sanchita_en_insurance","sanchita_en_recovery","sanchita_en_market","sanchita_en_social","shabana_en_edtech","shalini_en_companion","shalini_en_customer","shubh_en_narration","shubh_en_numbers","shubh_en_ads","shubh_en_recovery","shubh_en_audiobook","shubh_en_narration_gentle","shubh_en_sports","simran_en_narration","simran_en_automobile","simran_en_conversation","simran_en_customer","simran_en_edtech","simran_en_edtech_bot","simran_en_sales","simran_en_recovery","simran_en_ads","simran_en_therapist","sunny_en_social","varun_en_ads","varun_en_suspense","zarina_en_conversation","ishita_enhi_companion","ishita_enhi_customer","ishita_enhi_customer_expressive","sanchita_enhi_companion","shalini_enhi_companion","shalini_enhi_customer","shubh_enhi_companion","shubh_enhi_ads","shubh_enhi_banking","simran_enhi_companion","simran_enhi_customer","simran_enhi_banking_expressive","sunny_enhi_customer","bhavik_gu_conversation","pooja_gu_conversational","pooja_gu_customer","aditya_hi_conversational","aditya_hi_sales","anand_hi_documentary","anand_hi_news","aparna_hi_customer","aparna_hi_kyc","ashok_hi_character","ashok_hi_news","chhavi_hi_kids","ishita_hi_ads","ishita_hi_edtech","ishita_hi_banking","ishita_hi_ads_informal","ishita_hi_devotional","ishita_hi_numbers","ishita_hi_social","kunal_hi_kids","mahesh_hi_documentary","mani_hi_devotional","mani_hi_conversational","mohit_hi_conversational","nachiket_hi_devotional","priya_hi_recovery","ratan_hi_latenight","ratan_hi_customer_expressive","ratan_hi_documentary","ratan_hi_devotional","ratan_hi_recovery","ratan_hi_social","ratan_hi_sports","ratan_hi_latenight_warm","rehan_hi_social","ritu_hi_customer_utility","ritu_hi_kids","ritu_hi_conversation","ritu_hi_customer","ritu_hi_edtech","ritu_hi_ads_formal","ritu_hi_banking","ritu_hi_ads_informal","ritu_hi_insurance","ritu_hi_edtech_bot","ritu_hi_medical","ritu_hi_sales","ritu_hi_reels","ritu_hi_social","ritu_hi_customer_warm","ritu_hi_social_lively","roopa_hi_companion","roopa_hi_narration","roopa_hi_recovery","roopa_hi_market","roopa_hi_conversational","sanchita_hi_assistant","sanchita_hi_edtech","sanchita_hi_banking","sanchita_hi_feedback","sanchita_hi_ads_formal","sanchita_hi_ads_informal","sanchita_hi_interview","sanchita_hi_romantic","sanchita_hi_market","sanchita_hi_social","sanchita_hi_kyc","sarika_hi_conversation","shalini_hi_companion","shalini_hi_social","shreya_hi_conversational","shreya_hi_news","shruti_hi_edtech","shubh_hi_customer","shubh_hi_ecomm","shubh_hi_stories_mixed","shubh_hi_devotional","shubh_hi_ads","shubh_hi_recovery","shubh_hi_stories_dramatic","simran_hi_assistant","simran_hi_narration","simran_hi_automobile","simran_hi_conversation","simran_hi_news_breaking","simran_hi_social_energetic","simran_hi_social_excited","simran_hi_latenight","simran_hi_news","simran_hi_recovery","simran_hi_sales","suchitra_hi_ecomm","suhani_hi_social","sunny_hi_ads","sunny_hi_reels","tarun_hi_conversational","tarun_hi_sales","chaitra_hi_customer","shilpa_hi_narration","tanya_hi_narration","chaitra_kn_conversation","chaitra_kn_narration","chetan_kn_conversation","suchitra_kn_narration","ishita_mr_conversational","mrunal_mr_narration","neha_mr_narration","nilesh_mr_conversation","ritu_mr_insurance","ritu_mr_narration","rupali_mr_stories","soham_mr_narration","anand_pa_conversation","anand_pa_customer","harpreet_pa_narration","jaspal_pa_banking","gokul_ta_narration","aravind_ta_ads","aravind_ta_suspense","vijay_ta_narration","kavitha_te_conversation","kavitha_te_narration","pooja_te_conversation","tarun_te_narration","amelia_en_conversational","sophia_en_conversational","bimal_bn_suspense","girish_en_documentary","girish_en_devotional","payal_en_edtech","sarang_en_narration","aarti_hi_customer","advait_hi_character","aryaman_hi_ads","chirag_hi_social","girish_hi_devotional","mukul_hi_ads","mukul_hi_suspense","suman_hi_companion","vaibhav_hi_social","vandana_hi_ecomm","vipul_hi_social","mukul_mr_stories"],"bulbul:v3":["aditya","ritu","ashutosh","priya","neha","rahul","pooja","rohan","simran","kavya","amit","dev","ishita","shreya","ratan","varun","manan","sumit","roopa","kabir","aayan","shubh","advait","anand","tanya","tarun","sunny","mani","gokul","vijay","shruti","suhani","mohit","kavitha","rehan","soham","rupali"]};
+  const CLONE_LANGS = ["as-IN", "bn-IN", "en-IN", "gu-IN", "hi-IN", "kn-IN", "ml-IN", "mr-IN", "od-IN", "pa-IN", "ta-IN", "te-IN"];
+  const STOCK_LANGS = CLONE_LANGS.filter((l) => l !== "as-IN");
+  const MIME = { wav: "audio/wav", mp3: "audio/mpeg", flac: "audio/flac", aac: "audio/aac", opus: "audio/ogg" };
+  // Max characters per API request (kept a little under the documented limits)
+  const CHUNK_LIMIT = { clone: 950, "bulbul:v3": 2400, "bulbul:v4-flash": 2400 };
+  const KEY_NAME = "sarvamApiKey";
+  let memKey = "";
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const num = (v, d) => (v === "" || v == null || isNaN(+v) ? d : +v);
+
+  function getKey() { try { return localStorage.getItem(KEY_NAME) || memKey; } catch { return memKey; } }
+  function setKey(k) { memKey = k; try { k ? localStorage.setItem(KEY_NAME, k) : localStorage.removeItem(KEY_NAME); } catch {} }
+
+  // Split long text into chunks at sentence boundaries
+  function chunkText(text, max) {
+    const sentences = text.match(/[^.!?।\n]+[.!?।]*[\s\n]*/g) || [text];
+    const chunks = [];
+    let cur = "";
+    for (let s of sentences) {
+      while (s.length > max) {
+        let cut = s.lastIndexOf(" ", max);
+        if (cut <= 0) cut = max;
+        if (cur) { chunks.push(cur); cur = ""; }
+        chunks.push(s.slice(0, cut));
+        s = s.slice(cut);
+      }
+      if ((cur + s).length > max) { chunks.push(cur); cur = ""; }
+      cur += s;
+    }
+    if (cur.trim()) chunks.push(cur);
+    return chunks.map((c) => c.trim()).filter(Boolean);
+  }
+
+  async function sarvamError(res) {
+    if (res.status === 403) return new Error("Sarvam rejected the API key. Check the key at the top of the page.");
+    const data = await res.json().catch(() => ({}));
+    return new Error(data?.error?.message || `Sarvam API error ${res.status}`);
+  }
+
+  const b64ToBytes = (s) => { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; };
+  function concatBytes(list) {
+    const out = new Uint8Array(list.reduce((n, a) => n + a.length, 0));
+    let off = 0;
+    for (const a of list) { out.set(a, off); off += a.length; }
+    return out;
+  }
+  const ascii = (u, off) => String.fromCharCode(u[off], u[off + 1], u[off + 2], u[off + 3]);
+  const dv = (u) => new DataView(u.buffer, u.byteOffset, u.byteLength);
+
+  // Cloned voice: POST /voices/clone (multipart)
+  async function synthClone(text, o) {
+    const form = new FormData();
+    if (o.refFile) {
+      form.append("ref_audio", o.refFile, o.refFile.name);
+      if (o.refText) form.append("ref_text", o.refText);
+    } else {
+      form.append("voice_id", o.voiceId);
+    }
+    form.append("text", text);
+    form.append("language_code", o.language);
+    form.append("output_audio_codec", o.apiCodec);
+    form.append("speech_sample_rate", String(o.sampleRate));
+    form.append("enable_text_normalization", String(o.normalize));
+    form.append("enable_qc", String(o.qc));
+    form.append("enable_vad", String(o.vad));
+    if (o.maxDur != null) form.append("max_audio_duration", String(o.maxDur)); // can't be combined with pace
+    else form.append("pace", String(o.apiPace));
+    if (o.minDur != null) form.append("min_audio_duration", String(o.minDur));
+    const res = await fetch(`${API}/voices/clone`, { method: "POST", headers: { "api-subscription-key": getKey() }, body: form });
+    if (!res.ok) throw await sarvamError(res);
+    const data = await res.json();
+    return b64ToBytes(data.audio_b64 || data.audio);
+  }
+
+  // Stock voice: POST /text-to-speech (JSON)
+  async function synthStock(text, o) {
+    const body = {
+      text, target_language_code: o.language, speaker: o.speaker, model: o.model,
+      pace: o.apiPace, speech_sample_rate: o.sampleRate, output_audio_codec: o.apiCodec, temperature: o.temperature,
+    };
+    const res = await fetch(`${API}/text-to-speech`, {
+      method: "POST", headers: { "api-subscription-key": getKey(), "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (!res.ok) throw await sarvamError(res);
+    const data = await res.json();
+    return concatBytes(data.audios.map(b64ToBytes));
+  }
+
+  // Find the "fmt " and "data" chunks of a WAV file
+  function parseWav(u) {
+    const v = dv(u);
+    let off = 12, fmt = null;
+    while (off + 8 <= u.length) {
+      const id = ascii(u, off), size = v.getUint32(off + 4, true);
+      if (id === "fmt ") fmt = u.subarray(off + 8, off + 8 + size);
+      if (id === "data") return { fmt, pcm: u.subarray(off + 8, Math.min(u.length, off + 8 + size)) };
+      off += 8 + size + (size % 2);
+    }
+    throw new Error("Sarvam returned audio this page couldn't read.");
+  }
+
+  function buildWav(fmt, pcm) {
+    const h = new Uint8Array(12 + 8 + fmt.length + 8), v = dv(h);
+    const put = (s, off) => { for (let i = 0; i < 4; i++) h[off + i] = s.charCodeAt(i); };
+    put("RIFF", 0); v.setUint32(4, h.length - 8 + pcm.length, true); put("WAVE", 8);
+    put("fmt ", 12); v.setUint32(16, fmt.length, true); h.set(fmt, 20);
+    put("data", 20 + fmt.length); v.setUint32(24 + fmt.length, pcm.length, true);
+    return concatBytes([h, pcm]);
+  }
+
+  // Pitch shift + volume on 16-bit PCM WAV.
+  // Pitch: resample by ratio r (raises pitch by r and shortens audio by r). Sarvam was already
+  // asked to speak at pace/r, so after resampling the speed matches what the user picked.
+  function processWav(wav, ratio, volume) {
+    const { fmt, pcm } = parseWav(wav), f = dv(fmt);
+    const channels = f.getUint16(2, true);
+    if (f.getUint16(0, true) !== 1 || f.getUint16(14, true) !== 16) return wav; // only PCM16 is processed
+    const src = dv(pcm), frames = Math.floor(pcm.length / (2 * channels));
+    const outFrames = Math.floor(frames / ratio), out = new Uint8Array(outFrames * 2 * channels), dst = dv(out);
+    for (let i = 0; i < outFrames; i++) {
+      const pos = i * ratio, i0 = Math.floor(pos), frac = pos - i0, i1 = Math.min(i0 + 1, frames - 1);
+      for (let c = 0; c < channels; c++) {
+        const a = src.getInt16((i0 * channels + c) * 2, true), b = src.getInt16((i1 * channels + c) * 2, true);
+        dst.setInt16((i * channels + c) * 2, clamp(Math.round((a + (b - a) * frac) * volume), -32768, 32767), true);
+      }
+    }
+    return buildWav(fmt, out);
+  }
+
+  // /text-to-speech may return several WAV files glued together; split them
+  function splitWavs(u) {
+    if (ascii(u, 0) !== "RIFF") return [u];
+    const v = dv(u), out = [];
+    let off = 0;
+    while (off + 8 <= u.length && ascii(u, off) === "RIFF") {
+      const size = v.getUint32(off + 4, true) + 8;
+      out.push(u.subarray(off, off + size));
+      off += size;
+    }
+    return out.length ? out : [u];
+  }
+
+  async function runTts(input, onProgress) {
+    const text = String(input.text || "").trim();
+    if (!text) throw new Error("Please enter some text.");
+    if (!getKey()) throw new Error("Add your Sarvam API key at the top of the page first.");
+    const notes = [];
+    const mode = input.mode === "stock" ? "stock" : "clone";
+    const model = mode === "stock" && STOCK_VOICES[input.model] ? input.model : "bulbul:v3";
+    const langs = mode === "clone" ? CLONE_LANGS : STOCK_LANGS;
+    const o = {
+      language: langs.includes(input.language) ? input.language : "en-IN",
+      format: input.format || "wav",
+      sampleRate: +input.sampleRate || 24000,
+      pace: clamp(num(input.pace, 1), 0.5, 2),
+      pitch: clamp(num(input.pitch, 0), -6, 6), // semitones
+      volume: clamp(num(input.volume, 1), 0.3, 3),
+      normalize: input.normalize !== false, qc: !!input.qc, vad: input.vad !== false,
+      temperature: clamp(num(input.temperature, 0.6), 0.01, 1),
+      model,
+    };
+    if (mode === "clone") {
+      if (input.refFile) { o.refFile = input.refFile; o.refText = String(input.refText || "").slice(0, 500); }
+      else if (input.voiceId) o.voiceId = input.voiceId;
+      else throw new Error("No saved voice found in your Sarvam account. Use Upload clip or Sarvam voices.");
+    } else {
+      o.speaker = STOCK_VOICES[model].includes(input.speaker) ? input.speaker : STOCK_VOICES[model][0];
+      if (o.format === "opus") { o.format = "mp3"; notes.push("Opus isn't supported for Sarvam voices, so MP3 was used."); }
+    }
+
+    // Sarvam has no pitch/volume control for these models, so they're applied here
+    const post = o.pitch !== 0 || o.volume !== 1;
+    const ratio = post ? Math.pow(2, o.pitch / 12) : 1;
+    o.apiCodec = post ? "wav" : o.format;
+    if (post && o.format !== "wav") notes.push("Pitch/volume changes are applied to WAV audio, so the download is WAV.");
+    o.apiPace = clamp(o.pace / ratio, 0.5, 2);
+    if (post && Math.abs(o.apiPace - o.pace / ratio) > 1e-6) notes.push("That speed + pitch combination is outside Sarvam's range; speed was adjusted slightly.");
+
+    const chunks = chunkText(text, CHUNK_LIMIT[mode === "clone" ? "clone" : model]);
+    if (chunks.length > 1 && !["wav", "mp3"].includes(o.apiCodec)) {
+      throw new Error(`This text needs ${chunks.length} requests to Sarvam, and only WAV or MP3 can be joined. Pick WAV or MP3, or shorten the text.`);
+    }
+    if (mode === "clone") {
+      const min = num(input.minDur, null), max = num(input.maxDur, null);
+      if ((min != null || max != null) && chunks.length > 1) {
+        notes.push("Min/max length only apply to short text (one request), so they were ignored.");
+      } else {
+        if (max != null && min != null && max < min) throw new Error("Max length must be at least the min length.");
+        // Scale by ratio so the target length still holds after pitch resampling
+        o.minDur = min != null ? min * ratio : null;
+        o.maxDur = max != null ? max * ratio : null;
+        if (o.maxDur != null && o.pace !== 1) notes.push("Max length overrides speed (Sarvam doesn't allow both).");
+      }
+    }
+
+    const parts = [];
+    for (let i = 0; i < chunks.length; i++) {
+      if (onProgress && chunks.length > 1) onProgress(`Generating part ${i + 1} of ${chunks.length}…`);
+      parts.push(mode === "clone" ? await synthClone(chunks[i], o) : await synthStock(chunks[i], o));
+    }
+
+    let audio;
+    if (o.apiCodec === "wav") {
+      const wavs = parts.flatMap(splitWavs);
+      audio = wavs.length === 1 ? wavs[0] : (() => {
+        const p = wavs.map(parseWav);
+        return buildWav(p[0].fmt, concatBytes(p.map((x) => x.pcm)));
+      })();
+      if (post) audio = processWav(audio, ratio, o.volume);
+    } else {
+      audio = concatBytes(parts);
+    }
+    const ext = { linear16: "pcm", mulaw: "ulaw", alaw: "alaw" }[o.apiCodec] || o.apiCodec;
+    return { blob: new Blob([audio], { type: MIME[o.apiCodec] || "application/octet-stream" }), notes, chunks: chunks.length, ext };
+  }
+
+  // Sarvam's voice list endpoint doesn't allow browser requests, so saved voices are kept on this device
+  const DEFAULT_VOICES = [{ id: "svc-44088936-8a0d-442e-9ee9-d92ef475dc1c", name: "Sundaram", descriptor: "conversational" }];
+  function savedVoices() {
+    let extra = [];
+    try { extra = JSON.parse(localStorage.getItem("sarvamVoices") || "[]"); } catch {}
+    return [...DEFAULT_VOICES, ...extra.filter((v) => !DEFAULT_VOICES.some((d) => d.id === v.id))];
+  }
+  function addVoice(id, name) {
+    let extra = [];
+    try { extra = JSON.parse(localStorage.getItem("sarvamVoices") || "[]"); } catch {}
+    extra = extra.filter((v) => v.id !== id).concat({ id, name });
+    try { localStorage.setItem("sarvamVoices", JSON.stringify(extra)); } catch {}
+  }
+  // ---- end engine ----
+
+  const $ = (id) => document.getElementById(id);
+  const LANG_NAMES = { "as-IN":"Assamese", "bn-IN":"Bengali", "en-IN":"English", "gu-IN":"Gujarati", "hi-IN":"Hindi", "kn-IN":"Kannada", "ml-IN":"Malayalam", "mr-IN":"Marathi", "od-IN":"Odia", "pa-IN":"Punjabi", "ta-IN":"Tamil", "te-IN":"Telugu" };
+  const LANG_TAG = { "as-IN":"as", "bn-IN":"bn", "en-IN":"en", "gu-IN":"gu", "hi-IN":"hi", "kn-IN":"kn", "ml-IN":"ml", "mr-IN":"mr", "od-IN":"od", "pa-IN":"pa", "ta-IN":"ta", "te-IN":"te" };
+  const PRESETS = [
+    { name:"Natural", pace:1, pitch:0, volume:1, temperature:0.6 },
+    { name:"Calm", pace:0.9, pitch:-1, volume:0.95, temperature:0.4 },
+    { name:"Energetic", pace:1.15, pitch:1, volume:1.15, temperature:0.85 },
+    { name:"Deep", pace:0.95, pitch:-3, volume:1.05, temperature:0.5 },
+    { name:"Bright", pace:1.05, pitch:2, volume:1, temperature:0.7 },
+    { name:"Slow and clear", pace:0.8, pitch:0, volume:1, temperature:0.4 },
+    { name:"Fast", pace:1.35, pitch:0, volume:1, temperature:0.6 },
+  ];
+  let mode = "clone", data = null;
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  // v4-flash speaker ids look like "shubh_en_ads" or "ritu_hi_social_lively"
+  function speakerLabel(id) {
+    const p = id.split("_");
+    if (p.length < 3) return cap(id);
+    const tone = p.slice(2).join(" ");
+    return `${cap(p[0])}: ${tone}${p[1] === "enhi" ? " (Hinglish)" : ""}`;
+  }
+
+  function fillLangs() {
+    const langs = mode === "stock" ? data.stockLangs : data.cloneLangs;
+    const cur = $("lang").value || "en-IN";
+    $("lang").innerHTML = langs.map((l) => `<option value="${l}">${LANG_NAMES[l]}</option>`).join("");
+    $("lang").value = langs.includes(cur) ? cur : "en-IN";
+  }
+
+  function fillSpeakers() {
+    const model = $("model").value, all = data.stock[model], cur = $("speaker").value;
+    let list = all, hint = "";
+    if (model === "bulbul:v4-flash") {
+      const tag = LANG_TAG[$("lang").value];
+      list = all.filter((s) => { const t = s.split("_")[1]; return t === tag || (t === "enhi" && (tag === "en" || tag === "hi")); });
+      if (!list.length) { list = all; hint = "No voices made for this language, so all are shown. They can still speak it."; }
+      else hint = `${list.length} voices for ${LANG_NAMES[$("lang").value]}. The part after the name is the speaking style.`;
+      list = [...list].sort((a, b) => a.localeCompare(b));
+    }
+    $("speaker").innerHTML = list.map((s) => `<option value="${s}">${model === "bulbul:v4-flash" ? speakerLabel(s) : cap(s)}</option>`).join("");
+    if (list.includes(cur)) $("speaker").value = cur;
+    $("speakerHint").textContent = hint;
+  }
+
+  function syncVisibility() {
+    const stock = mode === "stock";
+    $("cloneBox").classList.toggle("hidden", mode !== "clone");
+    $("uploadBox").classList.toggle("hidden", mode !== "upload");
+    $("stockBox").classList.toggle("hidden", !stock);
+    $("tempBox").classList.toggle("hidden", !stock);   // temperature: Sarvam voices only
+    $("vadBox").classList.toggle("hidden", stock);
+    $("qcBox").classList.toggle("hidden", stock);
+    $("normBox").classList.toggle("hidden", stock);
+    $("durBox").classList.toggle("hidden", stock);
+    for (const o of $("format").options) o.disabled = stock && o.value === "opus";
+    if ($("format").selectedOptions[0].disabled) $("format").value = "mp3";
+    const md = $("maxDur").value !== "" && !stock;
+    $("pace").disabled = md;
+  }
+
+  function updateOutputs() {
+    $("paceOut").textContent = (+$("pace").value).toFixed(2) + "×";
+    const p = +$("pitch").value;
+    $("pitchOut").textContent = p === 0 ? "Normal" : (p > 0 ? "+" : "") + p + (Math.abs(p) === 1 ? " semitone" : " semitones");
+    $("volumeOut").textContent = Math.round($("volume").value * 100) + "%";
+    $("temperatureOut").textContent = (+$("temperature").value).toFixed(2);
+    document.querySelectorAll("#presets button").forEach((b) => {
+      const pr = PRESETS[b.dataset.i];
+      b.classList.toggle("on", +$("pace").value === pr.pace && +$("pitch").value === pr.pitch && +$("volume").value === pr.volume);
+    });
+  }
+
+  function applyPreset(pr) {
+    for (const k of ["pace", "pitch", "volume", "temperature"]) $(k).value = pr[k];
+    updateOutputs();
+  }
+
+  $("presets").innerHTML = PRESETS.map((p, i) => `<button data-i="${i}">${p.name}</button>`).join("");
+  $("presets").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) applyPreset(PRESETS[b.dataset.i]); });
+  $("reset").addEventListener("click", () => applyPreset(PRESETS[0]));
+  ["pace", "pitch", "volume", "temperature"].forEach((k) => $(k).addEventListener("input", updateOutputs));
+  $("modeSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    mode = b.dataset.mode;
+    document.querySelectorAll("#modeSeg button").forEach((x) => x.classList.toggle("on", x === b));
+    fillLangs(); if (mode === "stock") fillSpeakers(); syncVisibility();
+  });
+  $("model").addEventListener("change", () => { fillSpeakers(); syncVisibility(); });
+  $("lang").addEventListener("change", () => { if (mode === "stock") fillSpeakers(); });
+  $("maxDur").addEventListener("input", syncVisibility);
+  $("text").addEventListener("input", () => {
+    const n = $("text").value.length;
+    $("count").textContent = n.toLocaleString() + " characters";
+  });
+
+  function clipDuration(file) {
+    return new Promise((resolve) => {
+      const a = new Audio(), u = URL.createObjectURL(file);
+      a.onloadedmetadata = () => { resolve(a.duration); URL.revokeObjectURL(u); };
+      a.onerror = () => { resolve(null); URL.revokeObjectURL(u); };
+      a.src = u;
+    });
+  }
+
+  function showError(msg) { $("error").textContent = msg; $("error").style.display = msg ? "block" : "none"; }
+
+  $("go").addEventListener("click", async () => {
+    const text = $("text").value.trim();
+    showError("");
+    if (!text) return showError("Please enter some text.");
+    const body = {
+      text, mode: mode === "stock" ? "stock" : "clone", language: $("lang").value,
+      pace: +$("pace").value, pitch: +$("pitch").value, volume: +$("volume").value, temperature: +$("temperature").value,
+      format: $("format").value, sampleRate: +$("sampleRate").value,
+      normalize: $("normalize").checked, qc: $("qc").checked, vad: $("vad").checked,
+      minDur: $("minDur").value, maxDur: $("maxDur").value,
+      voiceId: $("voiceId").value, model: $("model").value, speaker: $("speaker").value,
+    };
+    $("go").disabled = true; $("go").textContent = "Generating…";
+    try {
+      if (mode === "upload") {
+        const f = $("refFile").files[0];
+        if (!f) throw new Error("Choose a reference clip first.");
+        if (f.size > 10 * 1024 * 1024) throw new Error("The clip must be 10 MB or smaller.");
+        const d = await clipDuration(f);
+        if (d && d > 15.5) throw new Error(`The clip is ${d.toFixed(1)} seconds long. Use 15 seconds or less.`);
+        body.refFile = f;
+        body.refText = $("refText").value;
+      }
+      const { blob, ext, notes, chunks } = await runTts(body, (msg) => { $("go").textContent = msg; });
+      const url = URL.createObjectURL(blob);
+      const name = "speech-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + "." + ext;
+      const playable = !["pcm", "ulaw", "alaw"].includes(ext);
+
+      $("player").classList.toggle("hidden", !playable);
+      $("rawNote").classList.toggle("hidden", playable);
+      if (playable) { $("player").src = url; $("player").play().catch(() => {}); }
+      $("dl").href = url; $("dl").download = name;
+      $("dl").textContent = `Download .${ext}`;
+      const sizeKb = blob.size / 1024;
+      const metaParts = [sizeKb > 1024 ? (sizeKb / 1024).toFixed(1) + " MB" : Math.round(sizeKb) + " KB"];
+      if (chunks > 1) metaParts.push(`joined from ${chunks} parts`);
+      $("meta").textContent = metaParts.join(" · ");
+      if (playable) $("player").onloadedmetadata = () => {
+        if (isFinite($("player").duration)) $("meta").textContent = `${$("player").duration.toFixed(1)} sec · ` + metaParts.join(" · ");
+      };
+      $("notes").innerHTML = notes.map((n) => `<div>${n}</div>`).join("");
+      $("notes").style.display = notes.length ? "block" : "none";
+      $("result").style.display = "block";
+      addHistory(text, url, name, ext);
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      $("go").disabled = false; $("go").textContent = "Generate audio";
+    }
+  });
+
+  function addHistory(text, url, name, ext) {
+    const li = document.createElement("li");
+    const voice = mode === "stock" ? $("speaker").selectedOptions[0]?.text : mode === "upload" ? "Uploaded clip" : $("voiceId").selectedOptions[0]?.text;
+    li.innerHTML = `<span class="t"></span><a class="btn ghost" href="${url}" download="${name}">.${ext}</a>`;
+    li.querySelector(".t").textContent = `${voice}: ${text}`;
+    li.querySelector(".t").title = text;
+    $("hist").prepend(li);
+    $("histCard").classList.remove("hidden");
+  }
+
+  function showKeyState() {
+    const k = getKey();
+    $("keyEdit").classList.toggle("hidden", !!k);
+    $("keyShow").classList.toggle("hidden", !k);
+    $("keyMask").textContent = k ? k.slice(0, 6) + "…" + k.slice(-4) : "";
+  }
+
+  function refreshVoices(select) {
+    data = { cloned: savedVoices(), stock: STOCK_VOICES, cloneLangs: CLONE_LANGS, stockLangs: STOCK_LANGS };
+    $("voiceId").innerHTML = data.cloned.map((v) => `<option value="${v.id}"></option>`).join("");
+    [...$("voiceId").options].forEach((o, i) => { const v = data.cloned[i]; o.textContent = v.name + (v.descriptor ? " (" + v.descriptor + ")" : ""); });
+    if (select) $("voiceId").value = select;
+    fillLangs(); fillSpeakers(); syncVisibility(); updateOutputs();
+  }
+
+  $("addVoice").addEventListener("click", () => {
+    const id = $("newVoiceId").value.trim(), name = $("newVoiceName").value.trim() || id.slice(0, 12);
+    if (!/^svc-[\w-]+$/.test(id)) return showError("A cloned voice ID starts with svc-");
+    showError(""); addVoice(id, name); $("newVoiceId").value = ""; $("newVoiceName").value = ""; refreshVoices(id);
+  });
+
+  $("saveKey").addEventListener("click", () => {
+    const k = $("apiKey").value.trim();
+    if (!k) return showError("Paste your Sarvam API key first.");
+    setKey(k); $("apiKey").value = ""; showKeyState(); showError("");
+  });
+  $("apiKey").addEventListener("keydown", (e) => { if (e.key === "Enter") $("saveKey").click(); });
+  $("changeKey").addEventListener("click", () => { $("keyEdit").classList.remove("hidden"); $("keyShow").classList.add("hidden"); $("apiKey").focus(); });
+  $("removeKey").addEventListener("click", () => { setKey(""); showKeyState(); });
+
+  showKeyState();
+  refreshVoices();
+</script>
+</body>
+</html>
