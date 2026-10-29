@@ -232,7 +232,7 @@
 <script>
   // Browsers can keep an old copy of this page for a few minutes. If version.json says a newer
   // version is published, reload once with the version in the URL so the browser fetches it fresh.
-  const PAGE_VERSION = "202610291209";
+  const PAGE_VERSION = "202610291211";
   fetch("version.json?t=" + Date.now(), { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : null))
     .then((d) => {
@@ -309,7 +309,11 @@
         const body = await res.clone().json().catch(() => ({}));
         retry = /voice not found/i.test(body?.error?.message || "");
       }
-      if (!retry || attempt >= MAX_TRIES) throw await sarvamError(res);
+      if (!retry) throw await sarvamError(res);
+      if (attempt >= MAX_TRIES) {
+        if (res.status === 400) throw new Error("Sarvam couldn't find this voice after 10 tries. It may have been deleted or renamed in your Sarvam account. Pick another voice, or try again in a minute.");
+        throw await sarvamError(res);
+      }
       if (onRetry) onRetry(attempt);
       await new Promise((r) => setTimeout(r, Math.min(250 * attempt, 1500)));
     }
@@ -482,8 +486,8 @@
     return { blob: new Blob([audio], { type: MIME[o.apiCodec] || "application/octet-stream" }), notes, chunks: chunks.length, ext };
   }
 
-  // Sarvam's voice list endpoint doesn't allow browser requests. A GitHub job copies the list into
-  // voices.json every 15 minutes (see .github/workflows/sync-voices.yml); these are the fallback.
+  // Sarvam's voice list endpoint doesn't allow browser requests. A scheduled GitHub job copies the list
+  // into voices.json (see .github/workflows/sync-voices.yml); these are the fallback.
   let DEFAULT_VOICES = [
     { id: "svc-44088936-8a0d-442e-9ee9-d92ef475dc1c", name: "Sundaram", descriptor: "conversational" },
     { id: "svc-f066fe5a-089c-460b-bbdd-1bf53ea07b2e", name: "Abhishek", descriptor: "conversational" },

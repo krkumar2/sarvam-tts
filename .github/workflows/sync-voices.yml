@@ -1,7 +1,8 @@
 name: Sync voices
 
 # Sarvam doesn't let web pages read the voice list, so this job copies it into voices.json,
-# which the page loads. New cloned voices show up in the dropdown within about 15 minutes.
+# which the page loads. GitHub runs scheduled jobs late (often every few hours), so use
+# "Run workflow" in the Actions tab to update the list right away.
 on:
   schedule:
     - cron: "*/15 * * * *"
