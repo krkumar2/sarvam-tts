@@ -232,7 +232,7 @@
 <script>
   // Browsers can keep an old copy of this page for a few minutes. If version.json says a newer
   // version is published, reload once with the version in the URL so the browser fetches it fresh.
-  const PAGE_VERSION = "202610271105";
+  const PAGE_VERSION = "202610291209";
   fetch("version.json?t=" + Date.now(), { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : null))
     .then((d) => {
@@ -296,6 +296,25 @@
   const ascii = (u, off) => String.fromCharCode(u[off], u[off + 1], u[off + 2], u[off + 3]);
   const dv = (u) => new DataView(u.buffer, u.byteOffset, u.byteLength);
 
+
+  // Sarvam sometimes answers "Voice not found" for a voice that exists (the next identical
+  // request usually works), and can return temporary 429/5xx errors. Retry those automatically.
+  const MAX_TRIES = 10;
+  async function sarvamFetch(url, init, onRetry) {
+    for (let attempt = 1; ; attempt++) {
+      const res = await fetch(url, init);
+      if (res.ok) return res;
+      let retry = res.status === 429 || res.status >= 500;
+      if (res.status === 400) {
+        const body = await res.clone().json().catch(() => ({}));
+        retry = /voice not found/i.test(body?.error?.message || "");
+      }
+      if (!retry || attempt >= MAX_TRIES) throw await sarvamError(res);
+      if (onRetry) onRetry(attempt);
+      await new Promise((r) => setTimeout(r, Math.min(250 * attempt, 1500)));
+    }
+  }
+
   // Cloned voice: POST /voices/clone (multipart)
   async function synthClone(text, o) {
     const form = new FormData();
@@ -315,8 +334,7 @@
     if (o.maxDur != null) form.append("max_audio_duration", String(o.maxDur)); // can't be combined with pace
     else form.append("pace", String(o.apiPace));
     if (o.minDur != null) form.append("min_audio_duration", String(o.minDur));
-    const res = await fetch(`${API}/voices/clone`, { method: "POST", headers: { "api-subscription-key": getKey() }, body: form });
-    if (!res.ok) throw await sarvamError(res);
+    const res = await sarvamFetch(`${API}/voices/clone`, { method: "POST", headers: { "api-subscription-key": getKey() }, body: form }, o.onRetry);
     const data = await res.json();
     return b64ToBytes(data.audio_b64 || data.audio);
   }
@@ -327,10 +345,9 @@
       text, target_language_code: o.language, speaker: o.speaker, model: o.model,
       pace: o.apiPace, speech_sample_rate: o.sampleRate, output_audio_codec: o.apiCodec, temperature: o.temperature,
     };
-    const res = await fetch(`${API}/text-to-speech`, {
+    const res = await sarvamFetch(`${API}/text-to-speech`, {
       method: "POST", headers: { "api-subscription-key": getKey(), "Content-Type": "application/json" }, body: JSON.stringify(body),
-    });
-    if (!res.ok) throw await sarvamError(res);
+    }, o.onRetry);
     const data = await res.json();
     return concatBytes(data.audios.map(b64ToBytes));
   }
@@ -444,7 +461,9 @@
 
     const parts = [];
     for (let i = 0; i < chunks.length; i++) {
-      if (onProgress && chunks.length > 1) onProgress(`Generating part ${i + 1} of ${chunks.length}…`);
+      const label = chunks.length > 1 ? `Generating part ${i + 1} of ${chunks.length}` : "Generating";
+      o.onRetry = (n) => onProgress && onProgress(`${label}, retrying (${n})…`);
+      if (onProgress && chunks.length > 1) onProgress(`${label}…`);
       parts.push(mode === "clone" ? await synthClone(chunks[i], o) : await synthStock(chunks[i], o));
     }
 
