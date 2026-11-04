@@ -16,5 +16,11 @@
   "name": "Sundaram",
   "language": "en-IN",
   "descriptor": "conversational"
+ },
+ {
+  "id": "svc-6364ef9c-c2d4-461d-b49c-399d4abab87b",
+  "name": "Tanya",
+  "language": "en-IN",
+  "descriptor": "sales"
  }
 ]
