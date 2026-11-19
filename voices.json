@@ -6,12 +6,6 @@
   "descriptor": "conversational"
  },
  {
-  "id": "svc-be9a7056-7dd3-41c9-ba3a-f5d2b4b2fae3",
-  "name": "krishna",
-  "language": "en-IN",
-  "descriptor": "conversational"
- },
- {
   "id": "svc-853c6eb2-c9d1-44bb-86a2-fb3e3441e468",
   "name": "Ravi",
   "language": "en-IN",
