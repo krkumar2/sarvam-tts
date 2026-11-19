@@ -18,12 +18,6 @@
   "descriptor": "conversational"
  },
  {
-  "id": "svc-6364ef9c-c2d4-461d-b49c-399d4abab87b",
-  "name": "Tanya",
-  "language": "en-IN",
-  "descriptor": "sales"
- },
- {
   "id": "svc-4fdb97fb-095b-4ed4-8fa9-be214f92a76b",
   "name": "Tanya_new",
   "language": "en-IN",
